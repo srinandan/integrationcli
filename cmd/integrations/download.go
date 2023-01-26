@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//DownloadVerCmd to publish an integration flow version
+// DownloadVerCmd to publish an integration flow version
 var DownloadVerCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download an integration flow version",
@@ -37,11 +37,11 @@ var DownloadVerCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		if version != "" {
-			_, err = integrations.Download(name, version)
+			err = integrations.DownloadFlow(name, version, folder)
 		} else if userLabel != "" {
-			_, err = integrations.DownloadUserLabel(name, userLabel)
+			err = integrations.DownloadFlowUserLabel(name, userLabel, folder)
 		} else if snapshot != "" {
-			_, err = integrations.DownloadSnapshot(name, snapshot)
+			err = integrations.DownloadFlowSnapshot(name, snapshot, folder)
 		}
 		return
 
@@ -57,6 +57,8 @@ func init() {
 		"", "Integration flow user label")
 	DownloadVerCmd.Flags().StringVarP(&snapshot, "snapshot", "s",
 		"", "Integration flow snapshot number")
+	DownloadVerCmd.Flags().StringVarP(&folder, "folder", "f",
+		"", "Folder to export Integration flow")
 
 	_ = DownloadVerCmd.MarkFlagRequired("name")
 }

@@ -38,6 +38,11 @@ type uploadIntegrationFormat struct {
 	FileFormat string `json:"fileFormat"`
 }
 
+type downloadIntegrationFormat struct {
+	Content    string `json:"content" binding:"required"`
+	FileFormat string `json:"fileFormat"`
+}
+
 type listIntegrationVersions struct {
 	IntegrationVersions []integrationVersion `json:"integrationVersions,omitempty"`
 	NextPageToken       string               `json:"nextPageToken,omitempty"`
@@ -522,6 +527,10 @@ func Publish(name string, version string) (respBody []byte, err error) {
 }
 
 // Download
+func DownloadFlow(name string, version string, folder string) (err error) {
+	return download(name, version, "", folder)
+}
+
 func Download(name string, version string) (respBody []byte, err error) {
 	return changeState(name, version, "", ":download")
 }
@@ -557,21 +566,21 @@ func PublishSnapshot(name string, snapshot string) (respBody []byte, err error) 
 }
 
 // DownloadSnapshot
-func DownloadSnapshot(name string, snapshot string) (respBody []byte, err error) {
+func DownloadFlowSnapshot(name string, snapshot string, folder string) (err error) {
 	var version string
 	if version, err = getVersionId(name, "snapshotNumber="+snapshot); err != nil {
-		return nil, err
+		return err
 	}
-	return Download(name, version)
+	return DownloadFlow(name, version, folder)
 }
 
 // DownloadSnapshot
-func DownloadUserLabel(name string, userlabel string) (respBody []byte, err error) {
+func DownloadFlowUserLabel(name string, userlabel string, folder string) (err error) {
 	var version string
 	if version, err = getVersionId(name, "userLabel="+userlabel); err != nil {
-		return nil, err
+		return err
 	}
-	return Download(name, version)
+	return DownloadFlow(name, version, folder)
 }
 
 // changeState
@@ -591,6 +600,57 @@ func changeState(name string, version string, filter string, action string) (res
 		respBody, err = apiclient.HttpClient(apiclient.GetPrintOutput(), u.String(), "")
 	}
 	return respBody, err
+}
+
+// dedicated download versions to download the integration
+func download(name string, version string, filter string, folder string) (err error) {
+	respBody := []byte{}
+	//if a version is sent, use it, else try the filter
+	if version == "" {
+		if version, err = getVersionId(name, filter); err != nil {
+			return err
+		}
+	}
+
+	u, _ := url.Parse(apiclient.GetBaseIntegrationURL())
+	u.Path = path.Join(u.Path, "integrations", name, "versions", version+":download")
+	//download is a get, the rest are post
+	respBody, err = apiclient.HttpClient(apiclient.GetPrintOutput(), u.String())
+
+	if folder != "" {
+
+		fileName := name + ".json"
+		overfileName := "overrides.json"
+		downloadVersion := downloadIntegrationFormat{}
+		if err = json.Unmarshal(respBody, &downloadVersion); err != nil {
+			clilog.Error.Println("invalid format found download.")
+			return err
+		}
+		iversion := integrationVersion{}
+		json.Unmarshal([]byte(downloadVersion.Content), &iversion)
+
+		if err != nil {
+			clilog.Error.Println(err)
+			return err
+		}
+		iString, _ := json.MarshalIndent(iversion, "", "  ")
+		if err = apiclient.WriteByteArrayToFile(path.Join(folder, fileName), false, []byte(iString)); err != nil {
+			clilog.Error.Println(err)
+			return err
+		}
+
+		//extract the overrides for the integration
+		or := overrides{}
+		if or, err = extractOverrides(iversion); err != nil {
+			return err
+		}
+		oString, _ := json.MarshalIndent(or, "", "  ")
+		if err = apiclient.WriteByteArrayToFile(path.Join(folder, overfileName), false, []byte(oString)); err != nil {
+			clilog.Error.Println(err)
+			return err
+		}
+	}
+	return err
 }
 
 // getVersionId

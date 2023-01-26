@@ -69,6 +69,35 @@ const pubsubTrigger = "cloud_pubsub_external_trigger/projects/cloud-crm-eventbus
 const apiTrigger = "api_trigger/"
 const authConfigValue = "{  \"@type\": \"type.googleapis.com/enterprise.crm.eventbus.authconfig.AuthConfigTaskParam\",\"authConfigId\": \""
 
+func extractOverrides(iversion integrationVersion) (overrides, error) {
+	taskoverride := overrides{}
+	for _, task := range iversion.TaskConfigs {
+		if task.Task != "GenericConnectorTask" {
+			continue
+		}
+		co := connectionoverrides{}
+		co.TaskId = task.TaskId
+		co.Task = task.Task
+
+		cparams, ok := task.Parameters["config"]
+		if !ok {
+			continue
+		}
+		cd, err := getConnectionDetails(*cparams.Value.JsonValue)
+		if err != nil {
+			return taskoverride, err
+		}
+
+		fullconnName := strings.TrimSuffix(cd.Connection.ConnectionName, "/")
+		parts := strings.Split(fullconnName, "/")
+		connName := parts[len(parts)-1]
+
+		co.Parameters.ConnectionName = connName
+		taskoverride.ConnectionOverrides = append(taskoverride.ConnectionOverrides, co)
+	}
+	return taskoverride, nil
+}
+
 // mergeOverrides
 func mergeOverrides(eversion integrationVersionExternal, o overrides, supressWarnings bool) (integrationVersionExternal, error) {
 
